@@ -7,8 +7,10 @@ from sklearn.metrics import classification_report, confusion_matrix, roc_auc_sco
 from sklearn.ensemble import RandomForestClassifier
 import seaborn as sns
 
+np.random.seed(42)
 
-class ImprovedNeuralNetwork:
+
+class NeuralNetwork:
     def __init__(self, input_size, hidden_size1, hidden_size2, output_size, lr=0.001):
         self.lr = lr
         self.params = {}
@@ -165,8 +167,8 @@ def load_and_preprocess_data():
     return X_train_scaled, X_val_scaled, X_test_scaled, y_train, y_val, y_test, scaler, feature_cols
 
 
-def train_improved_neural_network(X_train, X_val, X_test, y_train, y_val, y_test):
-    print("Training Improved Neural Network")
+def train_neural_network(X_train, X_val, X_test, y_train, y_val, y_test):
+    print("Training Neural Network")
     print("=" * 40)
     
     input_size = X_train.shape[1]
@@ -175,8 +177,7 @@ def train_improved_neural_network(X_train, X_val, X_test, y_train, y_val, y_test
     output_size = 1
     learning_rate = 0.0005
     
-    nn = ImprovedNeuralNetwork(input_size, hidden_size1, hidden_size2, output_size, learning_rate)
-    
+    nn = NeuralNetwork(input_size, hidden_size1, hidden_size2, output_size, learning_rate)
     nn.fit(X_train, y_train, X_val, y_val, epochs=2000, batch_size=16)
     
     y_pred_proba = nn.predict_proba(X_test)
@@ -184,13 +185,13 @@ def train_improved_neural_network(X_train, X_val, X_test, y_train, y_val, y_test
     
     auc = roc_auc_score(y_test, y_pred_proba)
     
-    print(f"\nImproved Neural Network Performance:")
+    print(f"\nNeural Network Performance:")
     print(f"AUC-ROC: {auc:.4f}")
     
     return nn, y_pred_proba, y_pred
 
 
-def train_sklearn_model(X_train, X_test, y_train, y_test):
+def train_sklearn_benchmark(X_train, X_test, y_train, y_test):
     print("\nTraining Scikit-learn Random Forest")
     print("=" * 40)
     
@@ -213,24 +214,6 @@ def train_sklearn_model(X_train, X_test, y_train, y_test):
     return rf, y_pred_proba, y_pred
 
 
-def analyze_class_imbalance(y_train, y_val, y_test):
-    print("\nClass Distribution Analysis")
-    print("=" * 30)
-    
-    train_pos = np.sum(y_train == 1)
-    train_neg = np.sum(y_train == 0)
-    val_pos = np.sum(y_val == 1)
-    val_neg = np.sum(y_val == 0)
-    test_pos = np.sum(y_test == 1)
-    test_neg = np.sum(y_test == 0)
-    
-    print(f"Training set: {train_neg} negative, {train_pos} positive ({train_pos/(train_pos+train_neg):.2%} positive)")
-    print(f"Validation set: {val_neg} negative, {val_pos} positive ({val_pos/(val_pos+val_neg):.2%} positive)")
-    print(f"Test set: {test_neg} negative, {test_pos} positive ({test_pos/(test_pos+test_neg):.2%} positive)")
-    
-    return train_pos, train_neg, test_pos, test_neg
-
-
 def calculate_optimal_threshold(y_true, y_pred_proba, fn_cost=1000, fp_cost=100):
     thresholds = np.arange(0.01, 0.99, 0.01)
     costs = []
@@ -250,129 +233,94 @@ def calculate_optimal_threshold(y_true, y_pred_proba, fn_cost=1000, fp_cost=100)
     return optimal_threshold, min_cost, thresholds, costs
 
 
-def plot_improved_results(nn, y_test, nn_pred_proba, rf_pred_proba, thresholds, costs):
+def plot_results(nn, y_test, nn_pred_proba, rf_pred_proba, thresholds, costs):
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
     
-    axes[0, 0].plot(nn.loss_history, label='Training Loss')
-    axes[0, 0].plot(nn.val_loss_history, label='Validation Loss')
-    axes[0, 0].set_title('Training and Validation Loss Curves')
+    axes[0, 0].plot(nn.loss_history, label='Training Loss', linewidth=2)
+    axes[0, 0].plot(nn.val_loss_history, label='Validation Loss', linewidth=2)
+    axes[0, 0].set_title('Training and Validation Loss Curves', fontsize=14, fontweight='bold')
     axes[0, 0].set_xlabel('Epoch (x10)')
     axes[0, 0].set_ylabel('Binary Crossentropy Loss')
     axes[0, 0].legend()
-    axes[0, 0].grid(True)
+    axes[0, 0].grid(True, alpha=0.3)
     
     from sklearn.metrics import roc_curve
     nn_fpr, nn_tpr, _ = roc_curve(y_test, nn_pred_proba)
     rf_fpr, rf_tpr, _ = roc_curve(y_test, rf_pred_proba)
     
-    axes[0, 1].plot(nn_fpr, nn_tpr, label=f'Neural Network (AUC = {roc_auc_score(y_test, nn_pred_proba):.3f})')
-    axes[0, 1].plot(rf_fpr, rf_tpr, label=f'Random Forest (AUC = {roc_auc_score(y_test, rf_pred_proba):.3f})')
-    axes[0, 1].plot([0, 1], [0, 1], 'k--', label='Random')
-    axes[0, 1].set_title('ROC Curves Comparison')
+    axes[0, 1].plot(nn_fpr, nn_tpr, label=f'Neural Network (AUC = {roc_auc_score(y_test, nn_pred_proba):.3f})', linewidth=2)
+    axes[0, 1].plot(rf_fpr, rf_tpr, label=f'Random Forest (AUC = {roc_auc_score(y_test, rf_pred_proba):.3f})', linewidth=2)
+    axes[0, 1].plot([0, 1], [0, 1], 'k--', label='Random Classifier', linewidth=1)
+    axes[0, 1].set_title('ROC Curves Comparison', fontsize=14, fontweight='bold')
     axes[0, 1].set_xlabel('False Positive Rate')
     axes[0, 1].set_ylabel('True Positive Rate')
     axes[0, 1].legend()
-    axes[0, 1].grid(True)
+    axes[0, 1].grid(True, alpha=0.3)
     
-    axes[1, 0].plot(thresholds, costs)
-    optimal_threshold, min_cost, _, _ = calculate_optimal_threshold(y_test, nn_pred_proba)
-    axes[1, 0].axvline(optimal_threshold, color='red', linestyle='--', label=f'Optimal Threshold = {optimal_threshold:.2f}')
-    axes[1, 0].set_title('Cost Analysis by Decision Threshold')
+    axes[1, 0].plot(thresholds, costs, linewidth=2)
+    axes[1, 0].axvline(thresholds[np.argmin(costs)], color='red', linestyle='--', linewidth=2, label=f'Optimal Threshold = {thresholds[np.argmin(costs)]:.2f}')
+    axes[1, 0].set_title('Cost Analysis by Decision Threshold', fontsize=14, fontweight='bold')
     axes[1, 0].set_xlabel('Decision Threshold')
     axes[1, 0].set_ylabel('Total Cost ($)')
     axes[1, 0].legend()
-    axes[1, 0].grid(True)
+    axes[1, 0].grid(True, alpha=0.3)
     
-    optimal_pred = (nn_pred_proba >= optimal_threshold).astype(int)
+    optimal_pred = (nn_pred_proba >= thresholds[np.argmin(costs)]).astype(int)
     cm = confusion_matrix(y_test, optimal_pred)
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[1, 1])
-    axes[1, 1].set_title(f'Confusion Matrix (Threshold = {optimal_threshold:.2f})')
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[1, 1], 
+                xticklabels=['No Readmission', 'Readmission'],
+                yticklabels=['No Readmission', 'Readmission'])
+    axes[1, 1].set_title(f'Confusion Matrix (Threshold = {thresholds[np.argmin(costs)]:.2f})', fontsize=14, fontweight='bold')
     axes[1, 1].set_xlabel('Predicted')
     axes[1, 1].set_ylabel('Actual')
     
     plt.tight_layout()
-    plt.savefig('hospital_nn_improved_results.png', dpi=300, bbox_inches='tight')
+    plt.savefig('hospital_nn_results.png', dpi=300, bbox_inches='tight')
     plt.show()
-
-
-def generate_improved_executive_summary(y_test, nn_pred_proba, rf_pred_proba, optimal_threshold, min_cost, train_pos, train_neg):
-    nn_optimal_pred = (nn_pred_proba >= optimal_threshold).astype(int)
-    nn_tn, nn_fp, nn_fn, nn_tp = confusion_matrix(y_test, nn_optimal_pred).ravel()
-    
-    nn_sensitivity = nn_tp / (nn_tp + nn_fn) if (nn_tp + nn_fn) > 0 else 0
-    nn_specificity = nn_tn / (nn_tn + nn_fp) if (nn_tn + nn_fp) > 0 else 0
-    nn_precision = nn_tp / (nn_tp + nn_fp) if (nn_tp + nn_fp) > 0 else 0
-    
-    rf_pred = (rf_pred_proba >= 0.5).astype(int)
-    rf_tn, rf_fp, rf_fn, rf_tp = confusion_matrix(y_test, rf_pred).ravel()
-    
-    rf_sensitivity = rf_tp / (rf_tp + rf_fn) if (rf_tp + rf_fn) > 0 else 0
-    rf_specificity = rf_tn / (rf_tn + rf_fp) if (rf_tn + rf_fp) > 0 else 0
-    
-    print("\n" + "="*60)
-    print("IMPROVED EXECUTIVE SUMMARY FOR DR. ANAND")
-    print("="*60)
-    
-    print(f"\nCLINICAL CONTEXT:")
-    print(f"- Dataset: {len(y_test)} patient records")
-    print(f"- Readmission rate: {train_pos/(train_pos+train_neg):.1%} (imbalanced dataset)")
-    print(f"- Models: Improved 3-layer neural network vs Random Forest")
-    
-    print(f"\nNEURAL NETWORK PERFORMANCE:")
-    print(f"- Sensitivity (Recall): {nn_sensitivity:.1%} - identifies high-risk patients")
-    print(f"- Specificity: {nn_specificity:.1%} - identifies low-risk patients")
-    print(f"- Precision: {nn_precision:.1%} - accuracy when predicting readmission")
-    print(f"- AUC-ROC: {roc_auc_score(y_test, nn_pred_proba):.3f} - overall discriminative ability")
-    
-    print(f"\nRANDOM FOREST PERFORMANCE:")
-    print(f"- Sensitivity (Recall): {rf_sensitivity:.1%} - identifies high-risk patients")
-    print(f"- Specificity: {rf_specificity:.1%} - identifies low-risk patients")
-    print(f"- AUC-ROC: {roc_auc_score(y_test, rf_pred_proba):.3f} - overall discriminative ability")
-    
-    print(f"\nECONOMIC IMPACT:")
-    print(f"- Optimal NN decision threshold: {optimal_threshold:.2f}")
-    print(f"- False Negative cost: $1,000 (missed high-risk patient)")
-    print(f"- False Positive cost: $100 (unnecessary intervention)")
-    print(f"- Expected minimum cost: ${min_cost:,.0f} per {len(y_test)} patients")
-    
-    print(f"\nKEY IMPROVEMENTS MADE:")
-    print(f"1. Xavier weight initialization for better gradient flow")
-    print(f"2. Feature engineering (age², BP ratios, medication ratios)")
-    print(f"3. Early stopping to prevent overfitting")
-    print(f"4. Validation set for hyperparameter tuning")
-    print(f"5. Balanced learning approach for imbalanced data")
-    
-    print(f"\nCLINICAL RECOMMENDATIONS:")
-    print(f"1. Use Neural Network with {optimal_threshold:.2f} threshold")
-    print(f"2. NN catches {nn_sensitivity:.0%} of patients who will be readmitted")
-    print(f"3. Model cost-effective: saves ${25000-min_cost:,.0f} vs treating all")
-    print(f"4. Monitor performance and recalibrate quarterly")
-    
-    print(f"\nIMPLEMENTATION ROADMAP:")
-    print(f"1. Deploy neural network model in hospital EMR")
-    print(f"2. Set up risk alerts at patient discharge")
-    print(f"3. Create care coordination for high-risk patients")
-    print(f"4. Track actual readmission vs predicted outcomes")
-    
-    print(f"\n" + "="*60)
 
 
 def main():
     X_train, X_val, X_test, y_train, y_val, y_test, scaler, feature_cols = load_and_preprocess_data()
     
-    train_pos, train_neg, test_pos, test_neg = analyze_class_imbalance(y_train, y_val, y_test)
+    print(f"Training set: {X_train.shape[0]} patients")
+    print(f"Validation set: {X_val.shape[0]} patients")
+    print(f"Test set: {X_test.shape[0]} patients")
+    print(f"Features: {len(feature_cols)}")
+    print(f"Readmission rate - Training: {np.mean(y_train):.2%}")
+    print(f"Readmission rate - Test: {np.mean(y_test):.2%}")
     
-    nn, nn_pred_proba, nn_pred = train_improved_neural_network(X_train, X_val, X_test, y_train, y_val, y_test)
-    
-    rf, rf_pred_proba, rf_pred = train_sklearn_model(X_train, X_test, y_train, y_test)
+    nn, nn_pred_proba, nn_pred = train_neural_network(X_train, X_val, X_test, y_train, y_val, y_test)
+    rf, rf_pred_proba, rf_pred = train_sklearn_benchmark(X_train, X_test, y_train, y_test)
     
     optimal_threshold, min_cost, thresholds, costs = calculate_optimal_threshold(y_test, nn_pred_proba)
     
-    plot_improved_results(nn, y_test, nn_pred_proba, rf_pred_proba, thresholds, costs)
+    print(f"Optimal Decision Threshold: {optimal_threshold:.2f}")
+    print(f"Minimum Expected Cost: ${min_cost:,.0f} per {len(y_test)} patients")
+    print(f"Cost Savings vs Treating All: ${(len(y_test) * 100) - min_cost:,.0f}")
     
-    generate_improved_executive_summary(y_test, nn_pred_proba, rf_pred_proba, optimal_threshold, min_cost, train_pos, train_neg)
+    plot_results(nn, y_test, nn_pred_proba, rf_pred_proba, thresholds, costs)
     
-    print(f"\nImproved analysis complete. Results saved to 'hospital_nn_improved_results.png'")
+    optimal_pred = (nn_pred_proba >= optimal_threshold).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y_test, optimal_pred).ravel()
+    
+    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    
+    print("\n" + "="*60)
+    print("CLINICAL PERFORMANCE SUMMARY")
+    print("="*60)
+    print(f"\nNEURAL NETWORK METRICS (at optimal threshold {optimal_threshold:.2f}):")
+    print(f"- Sensitivity (Recall): {sensitivity:.1%}")
+    print(f"- Specificity: {specificity:.1%}")
+    print(f"- Precision: {precision:.1%}")
+    print(f"- AUC-ROC: {roc_auc_score(y_test, nn_pred_proba):.3f}")
+    
+    print(f"\nECONOMIC IMPACT:")
+    print(f"- Total Expected Cost: ${min_cost:,}")
+    print(f"- Cost per Patient: ${min_cost/len(y_test):.2f}")
+    
+    print(f"\nAnalysis complete. Results saved to 'hospital_nn_results.png'")
 
 
 if __name__ == "__main__":

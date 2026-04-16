@@ -13,7 +13,6 @@ class NeuralNetwork:
         self.lr = lr
         self.params = {}
         
-        # Initialize weights and biases
         self.params['W1'] = np.random.randn(input_size, hidden_size1) * 0.01
         self.params['b1'] = np.zeros((1, hidden_size1))
         self.params['W2'] = np.random.randn(hidden_size1, hidden_size2) * 0.01
@@ -39,15 +38,12 @@ class NeuralNetwork:
     def forward(self, X):
         self.cache = {}
         
-        # Layer 1
         self.cache['Z1'] = np.dot(X, self.params['W1']) + self.params['b1']
         self.cache['A1'] = self.relu(self.cache['Z1'])
         
-        # Layer 2
         self.cache['Z2'] = np.dot(self.cache['A1'], self.params['W2']) + self.params['b2']
         self.cache['A2'] = self.relu(self.cache['Z2'])
         
-        # Layer 3
         self.cache['Z3'] = np.dot(self.cache['A2'], self.params['W3']) + self.params['b3']
         self.cache['A3'] = self.sigmoid(self.cache['Z3'])
         
@@ -56,18 +52,15 @@ class NeuralNetwork:
     def backward(self, X, y):
         m = X.shape[0]
         
-        # Output layer gradient
         dZ3 = self.cache['A3'] - y.reshape(-1, 1)
         self.grads['dW3'] = (1/m) * np.dot(self.cache['A2'].T, dZ3)
         self.grads['db3'] = (1/m) * np.sum(dZ3, axis=0, keepdims=True)
         
-        # Hidden layer 2 gradient
         dA2 = np.dot(dZ3, self.params['W3'].T)
         dZ2 = dA2 * self.relu_derivative(self.cache['Z2'])
         self.grads['dW2'] = (1/m) * np.dot(self.cache['A1'].T, dZ2)
         self.grads['db2'] = (1/m) * np.sum(dZ2, axis=0, keepdims=True)
         
-        # Hidden layer 1 gradient
         dA1 = np.dot(dZ2, self.params['W2'].T)
         dZ1 = dA1 * self.relu_derivative(self.cache['Z1'])
         self.grads['dW1'] = (1/m) * np.dot(X.T, dZ1)
@@ -85,19 +78,16 @@ class NeuralNetwork:
         self.grads = {}
         
         for epoch in range(epochs):
-            # Mini-batch training
             indices = np.random.permutation(X.shape[0])
             
             for i in range(0, X.shape[0], batch_size):
                 batch_idx = indices[i:i+batch_size]
                 X_batch, y_batch = X[batch_idx], y[batch_idx]
                 
-                # Forward and backward pass
                 y_pred = self.forward(X_batch)
                 self.backward(X_batch, y_batch)
                 self.update_params()
             
-            # Calculate and store loss
             if epoch % 50 == 0:
                 y_pred_full = self.forward(X)
                 loss = self.binary_crossentropy(y, y_pred_full.flatten())
@@ -117,60 +107,59 @@ class NeuralNetwork:
 def load_and_preprocess_data():
     df = pd.read_csv('hospital_records_cleaned.csv')
     
-    # Select features for modeling
-    feature_cols = ['age', 'length_of_stay_days', 'systolic_bp', 'diastolic_bp', 
-                   'glucose_mg_dl', 'creatinine_mg_dl', 'bmi', 'num_medications', 
-                   'num_diagnoses', 'icu_stay']
+    df['age_squared'] = df['age'] ** 2
+    df['bp_ratio'] = df['diastolic_bp'] / df['systolic_bp']
+    df['med_per_diagnosis'] = df['num_medications'] / (df['num_diagnoses'] + 1)
+    df['stay_med_ratio'] = df['length_of_stay_days'] / (df['num_medications'] + 1)
     
-    # Handle categorical variables
+    feature_cols = ['age', 'age_squared', 'length_of_stay_days', 'systolic_bp', 'diastolic_bp', 
+                   'glucose_mg_dl', 'creatinine_mg_dl', 'bmi', 'num_medications', 
+                   'num_diagnoses', 'icu_stay', 'bp_ratio', 'med_per_diagnosis', 'stay_med_ratio']
+    
     df['gender_encoded'] = LabelEncoder().fit_transform(df['gender'].fillna('Unknown'))
     df['department_encoded'] = LabelEncoder().fit_transform(df['department'].fillna('Unknown'))
     df['insurance_encoded'] = LabelEncoder().fit_transform(df['insurance_type'].fillna('Unknown'))
     
     feature_cols.extend(['gender_encoded', 'department_encoded', 'insurance_encoded'])
     
-    # Prepare features and target
     X = df[feature_cols].copy()
     y = df['readmitted_30d'].values
     
-    # Handle missing values
     X = X.fillna(X.median())
     
-    # Split data
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+    X_train, X_temp, y_train, y_temp = train_test_split(
+        X, y, test_size=0.3, random_state=42, stratify=y
     )
     
-    # Scale features
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
+    )
+    
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
+    X_val_scaled = scaler.transform(X_val)
     X_test_scaled = scaler.transform(X_test)
     
-    return X_train_scaled, X_test_scaled, y_train, y_test, scaler, feature_cols
+    return X_train_scaled, X_val_scaled, X_test_scaled, y_train, y_val, y_test, scaler, feature_cols
 
 
 def train_neural_network(X_train, X_test, y_train, y_test):
     print("Training Neural Network from Scratch")
     print("=" * 40)
     
-    # Network architecture
     input_size = X_train.shape[1]
     hidden_size1 = 64
     hidden_size2 = 32
     output_size = 1
     learning_rate = 0.001
     
-    # Initialize and train network
     nn = NeuralNetwork(input_size, hidden_size1, hidden_size2, output_size, learning_rate)
     
-    # Train the model
     nn.fit(X_train, y_train, epochs=1000, batch_size=32)
     
-    # Make predictions
     y_pred_proba = nn.predict_proba(X_test)
     y_pred = nn.predict(X_test)
     
-    # Calculate metrics
     auc = roc_auc_score(y_test, y_pred_proba)
     
     print(f"\nNeural Network Performance:")
@@ -183,15 +172,12 @@ def train_sklearn_model(X_train, X_test, y_train, y_test):
     print("\nTraining Scikit-learn Random Forest")
     print("=" * 40)
     
-    # Train Random Forest
     rf = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
     rf.fit(X_train, y_train)
     
-    # Make predictions
     y_pred_proba = rf.predict_proba(X_test)[:, 1]
     y_pred = rf.predict(X_test)
     
-    # Calculate metrics
     auc = roc_auc_score(y_test, y_pred_proba)
     
     print(f"Random Forest AUC-ROC: {auc:.4f}")
@@ -236,14 +222,12 @@ def calculate_optimal_threshold(y_true, y_pred_proba, fn_cost=1000, fp_cost=100)
 def plot_results(nn, y_test, nn_pred_proba, rf_pred_proba, thresholds, costs):
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
     
-    # Training loss curve
     axes[0, 0].plot(nn.loss_history)
     axes[0, 0].set_title('Training Loss Curve')
     axes[0, 0].set_xlabel('Epoch (x50)')
     axes[0, 0].set_ylabel('Binary Crossentropy Loss')
     axes[0, 0].grid(True)
     
-    # ROC curves
     from sklearn.metrics import roc_curve
     nn_fpr, nn_tpr, _ = roc_curve(y_test, nn_pred_proba)
     rf_fpr, rf_tpr, _ = roc_curve(y_test, rf_pred_proba)
@@ -257,7 +241,6 @@ def plot_results(nn, y_test, nn_pred_proba, rf_pred_proba, thresholds, costs):
     axes[0, 1].legend()
     axes[0, 1].grid(True)
     
-    # Cost analysis
     axes[1, 0].plot(thresholds, costs)
     optimal_threshold, min_cost, _, _ = calculate_optimal_threshold(y_test, nn_pred_proba)
     axes[1, 0].axvline(optimal_threshold, color='red', linestyle='--', label=f'Optimal Threshold = {optimal_threshold:.2f}')
@@ -267,7 +250,6 @@ def plot_results(nn, y_test, nn_pred_proba, rf_pred_proba, thresholds, costs):
     axes[1, 0].legend()
     axes[1, 0].grid(True)
     
-    # Confusion matrix at optimal threshold
     optimal_pred = (nn_pred_proba >= optimal_threshold).astype(int)
     cm = confusion_matrix(y_test, optimal_pred)
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[1, 1])
@@ -324,25 +306,18 @@ def generate_executive_summary(y_test, nn_pred_proba, optimal_threshold, min_cos
 
 
 def main():
-    # Load and preprocess data
     X_train, X_test, y_train, y_test, scaler, feature_cols = load_and_preprocess_data()
     
-    # Analyze class imbalance
     train_pos, train_neg, test_pos, test_neg = analyze_class_imbalance(y_train, y_test)
     
-    # Train neural network
     nn, nn_pred_proba, nn_pred = train_neural_network(X_train, X_test, y_train, y_test)
     
-    # Train scikit-learn model for comparison
     rf, rf_pred_proba, rf_pred = train_sklearn_model(X_train, X_test, y_train, y_test)
     
-    # Cost analysis and optimal threshold
     optimal_threshold, min_cost, thresholds, costs = calculate_optimal_threshold(y_test, nn_pred_proba)
     
-    # Plot results
     plot_results(nn, y_test, nn_pred_proba, rf_pred_proba, thresholds, costs)
     
-    # Generate executive summary
     generate_executive_summary(y_test, nn_pred_proba, optimal_threshold, min_cost, train_pos, train_neg)
     
     print(f"\nAnalysis complete. Results saved to 'hospital_nn_results.png'")
